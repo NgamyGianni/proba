@@ -2,6 +2,7 @@ import utils
 import pandas as pd  # package for high-performance, easy-to-use data structures and data analysis
 import numpy as np  # fundamental package for scientific computing with Python
 import math
+import scipy
 
 train = pd.read_csv("train.csv")
 test = pd.read_csv("test.csv")
@@ -224,18 +225,24 @@ class MAPNaiveBayesClassifier(APrioriClassifier):
 
     def __init__(self, df):
         self.df = df
-        self.p = {e: P2D_p(df, e) for e in df if e != "target"}
+        self.p = {e: P2D_p(df, e) for e in df}
 
     def estimProbas(self, e):
-        res = {0: 1, 1: 1}
+        res = {0: 0, 1: 0}
+        n = 0
         for key in e:
             if key != "target":
                 if e[key] in self.p[key]:
-                    res[0] *= self.p[key][e[key]][0]
-                    res[1] *= self.p[key][e[key]][1]
+                    res[0] += self.p[key][e[key]][0]
+                    res[1] += self.p[key][e[key]][1]
                 else:
-                    res[0] *= 0
-                    res[1] *= 0
+                    res[0] += 0
+                    res[1] += 0
+                n += 1
+        res[0] += self.p["target"][e["target"]][0]
+        res[1] += self.p["target"][e["target"]][1]
+        res[0] /= n+1
+        res[1] /= n+1
         return res
 
     def estimClass(self, e):
@@ -264,9 +271,21 @@ class MAPNaiveBayesClassifier(APrioriClassifier):
 
         return {"VP": vp, "VN": vn, "FP": fp, "FN": fn, "Précision": vp / (vp + fp), "Rappel": vp / (vp + fn)}
 
+#print(P2D_l(train, "age"))
+#print(P2D_p(train, "age"))
+res1 = 1
+res0 = 1
+for e in utils.getNthDict(train,0):
+    if e != "target":
+        res1 *= P2D_p(train, e)[utils.getNthDict(train,0)[e]][1]
+        res0 *= P2D_p(train, e)[utils.getNthDict(train,0)[e]][0]
+print(res1/(res1+res0))
+print(res0/(res1+res0))
+"""
 cl=MAPNaiveBayesClassifier(train)
 for i in [0,1,2]:
     print("Estimation de la proba de l'individu {} par MAPNaiveBayesClassifier : {}".format(i,cl.estimProbas(utils.getNthDict(train,i))))
     print("Estimation de la classe de l'individu {} par MAPNaiveBayesClassifier : {}".format(i,cl.estimClass(utils.getNthDict(train,i))))
 print("test en apprentissage : {}".format(cl.statsOnDF(train)))
 print("test en validation: {}".format(cl.statsOnDF(test)))
+"""
