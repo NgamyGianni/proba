@@ -225,7 +225,7 @@ class MAPNaiveBayesClassifier(APrioriClassifier):
 
     def __init__(self, df):
         self.df = df
-        self.p = {e: P2D_p(df, e) for e in df}
+        self.p = {e: P2D_l(df, e) for e in df if e != "target"}
 
     def estimProbas(self, e):
         res = {0: 0, 1: 0}
@@ -233,16 +233,16 @@ class MAPNaiveBayesClassifier(APrioriClassifier):
         for key in e:
             if key != "target":
                 if e[key] in self.p[key]:
-                    res[0] += self.p[key][e[key]][0]
-                    res[1] += self.p[key][e[key]][1]
+                    res[0] += self.p[key][0][e[key]]
+                    res[1] += self.p[key][1][e[key]]
                 else:
                     res[0] += 0
                     res[1] += 0
                 n += 1
-        res[0] += self.p["target"][e["target"]][0]
-        res[1] += self.p["target"][e["target"]][1]
-        res[0] /= n+1
-        res[1] /= n+1
+        #res[0] += self.p["target"][e["target"]][0]
+        #res[1] += self.p["target"][e["target"]][1]
+        res[0] /= n
+        res[1] /= n
         return res
 
     def estimClass(self, e):
@@ -273,14 +273,19 @@ class MAPNaiveBayesClassifier(APrioriClassifier):
 
 #print(P2D_l(train, "age"))
 #print(P2D_p(train, "age"))
+
 res1 = 1
 res0 = 1
 for e in utils.getNthDict(train,0):
     if e != "target":
-        res1 *= P2D_p(train, e)[utils.getNthDict(train,0)[e]][1]
-        res0 *= P2D_p(train, e)[utils.getNthDict(train,0)[e]][0]
-print(res1/(res1+res0))
-print(res0/(res1+res0))
+        print("1 = "+str(P2D_l(train, e)[1][utils.getNthDict(train,0)[e]]))
+        print("0 = "+str(P2D_l(train, e)[0][utils.getNthDict(train,0)[e]]))
+        res0 *= P2D_l(train, e)[0][utils.getNthDict(train,0)[e]]
+        res1 *= P2D_l(train, e)[1][utils.getNthDict(train,0)[e]]
+total = res0+res1
+print("res0 = "+str(res0/total))
+print("res1 = "+str(res1/total))
+      
 """
 cl=MAPNaiveBayesClassifier(train)
 for i in [0,1,2]:
