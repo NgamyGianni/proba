@@ -249,9 +249,9 @@ class MAPNaiveBayesClassifier(APrioriClassifier):
                 else:
                     res[0] *= 0
                     res[1] *= 0
-                total *= proba(e[key], key, train)
-        res[0] = (proba(0, "target", train)*res[0])/total
-        res[1] = (proba(1, "target", train)*res[1])/total
+                total *= proba(e[key], key, self.df)
+        res[0] = (proba(0, "target", self.df)*res[0])/total
+        res[1] = (proba(1, "target", self.df)*res[1])/total
         total2 = res[0]+res[1]
         res[0] = res[0]/total2
         res[1] = res[1]/total2
