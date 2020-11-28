@@ -177,6 +177,15 @@ def nbParamsNaiveBayes(df, attr, attrs):
     res += tmp
     return res * 8
 
+def proba(data, attr, df):
+    l = pd.crosstab(df.target, [df[attr]])
+    res = 0
+    
+    for e in l:
+        res += l[e][0]+l[e][1]
+
+    return (l[data][0]+l[data][1])/res
+
 class MLNaiveBayesClassifier(APrioriClassifier):
 
     def __init__(self, df):
@@ -228,21 +237,24 @@ class MAPNaiveBayesClassifier(APrioriClassifier):
         self.p = {e: P2D_l(df, e) for e in df if e != "target"}
 
     def estimProbas(self, e):
-        res = {0: 0, 1: 0}
-        n = 0
+        res = {0: 1, 1: 1}
+
+        total = 1
+
         for key in e:
             if key != "target":
-                if e[key] in self.p[key]:
-                    res[0] += self.p[key][0][e[key]]
-                    res[1] += self.p[key][1][e[key]]
+                if e[key] in self.p[key][0]:
+                    res[0] *= self.p[key][0][e[key]]
+                    res[1] *= self.p[key][1][e[key]]
                 else:
-                    res[0] += 0
-                    res[1] += 0
-                n += 1
-        #res[0] += self.p["target"][e["target"]][0]
-        #res[1] += self.p["target"][e["target"]][1]
-        res[0] /= n
-        res[1] /= n
+                    res[0] *= 0
+                    res[1] *= 0
+                total *= proba(e[key], key, train)
+        res[0] = (proba(0, "target", train)*res[0])/total
+        res[1] = (proba(1, "target", train)*res[1])/total
+        total2 = res[0]+res[1]
+        res[0] = res[0]/total2
+        res[1] = res[1]/total2
         return res
 
     def estimClass(self, e):
@@ -271,26 +283,112 @@ class MAPNaiveBayesClassifier(APrioriClassifier):
 
         return {"VP": vp, "VN": vn, "FP": fp, "FN": fn, "Précision": vp / (vp + fp), "Rappel": vp / (vp + fn)}
 
-#print(P2D_l(train, "age"))
-#print(P2D_p(train, "age"))
+def isIndepFromTarget(df, attr, x):
+    l = pd.crosstab(df.target, [df[attr]])
+    return scipy.stats.chi2_contingency(l)[1] >= x
 
-res1 = 1
-res0 = 1
-for e in utils.getNthDict(train,0):
-    if e != "target":
-        print("1 = "+str(P2D_l(train, e)[1][utils.getNthDict(train,0)[e]]))
-        print("0 = "+str(P2D_l(train, e)[0][utils.getNthDict(train,0)[e]]))
-        res0 *= P2D_l(train, e)[0][utils.getNthDict(train,0)[e]]
-        res1 *= P2D_l(train, e)[1][utils.getNthDict(train,0)[e]]
-total = res0+res1
-print("res0 = "+str(res0/total))
-print("res1 = "+str(res1/total))
-      
-"""
+class ReducedMLNaiveBayesClassifier(APrioriClassifier):
+    def __init__(self, df, x):
+        self.df = df
+        self.attrs = [attr for attr in df if not(isIndepFromTarget(df, attr, x)) and attr != "target"]
+        self.p = {e: P2D_l(df, e) for e in self.attrs} 
+
+    def estimProbas(self, e):
+        res = {0:1, 1:1}
+        for key in self.attrs:
+            if e[key] in self.p[key][0]:
+                res[0] *= self.p[key][0][e[key]]
+                res[1] *= self.p[key][1][e[key]]
+            else:
+                res[0] *= 0
+                res[1] *= 0
+        return res
+
+    def estimClass(self, e):
+        if self.estimProbas(e)[0] >= self.estimProbas(e)[1]:
+            return 0
+        return 1
+
+    def draw(self):
+        return drawNaiveBayes(self.attrs, "target")
+
+    def statsOnDF(self, data):
+        vp = 0
+        vn = 0
+        fp = 0
+        fn = 0
+
+        for i in range(len(data)):
+            e = data["target"][i]
+            if e == 0:
+                if self.estimClass(utils.getNthDict(data, i)) == 1:
+                    fp += 1
+                else:
+                    vn += 1
+            else:
+                if self.estimClass(utils.getNthDict(data, i)) == 1:
+                    vp += 1
+                else:
+                    fn += 1
+
+        return {"VP": vp, "VN": vn, "FP": fp, "FN": fn, "Précision": vp / (vp + fp), "Rappel": vp / (vp + fn)}
+
+class ReducedMAPNaiveBayesClassifier(APrioriClassifier):
+
+    def __init__(self, df, x):
+        self.df = df
+        self.attrs = [attr for attr in df if not(isIndepFromTarget(df, attr, x)) and attr != "target"]
+        self.p = {e: P2D_l(df, e) for e in self.attrs}
+
+    def estimProbas(self, e):
+        res = {0: 1, 1: 1}
+
+        total = 1
+
+        for key in self.attrs:
+            if e[key] in self.p[key][0]:
+                res[0] *= self.p[key][0][e[key]]
+                res[1] *= self.p[key][1][e[key]]
+            else:
+                res[0] *= 0
+                res[1] *= 0
+            total *= proba(e[key], key, train)
+        res[0] = (proba(0, "target", train)*res[0])/total
+        res[1] = (proba(1, "target", train)*res[1])/total
+        total2 = res[0]+res[1]
+        res[0] = res[0]/total2
+        res[1] = res[1]/total2
+        return res
+
+    def estimClass(self, e):
+        if self.estimProbas(e)[0] >= self.estimProbas(e)[1]:
+            return 0
+        return 1
+
+    def statsOnDF(self, data):
+        vp = 0
+        vn = 0
+        fp = 0
+        fn = 0
+
+        for i in range(len(data)):
+            e = data["target"][i]
+            if e == 0:
+                if self.estimClass(utils.getNthDict(data, i)) == 1:
+                    fp += 1
+                else:
+                    vn += 1
+            else:
+                if self.estimClass(utils.getNthDict(data, i)) == 1:
+                    vp += 1
+                else:
+                    fn += 1
+
+        return {"VP": vp, "VN": vn, "FP": fp, "FN": fn, "Précision": vp / (vp + fp), "Rappel": vp / (vp + fn)}
+
 cl=MAPNaiveBayesClassifier(train)
 for i in [0,1,2]:
     print("Estimation de la proba de l'individu {} par MAPNaiveBayesClassifier : {}".format(i,cl.estimProbas(utils.getNthDict(train,i))))
-    print("Estimation de la classe de l'individu {} par MAPNaiveBayesClassifier : {}".format(i,cl.estimClass(utils.getNthDict(train,i))))
+    print("Estimation de la classe de l'individu {} par MAPNaiveBayesClassifier : {}".format(i,cl.estimClass(utils.getNthDict(train,i)))) 
 print("test en apprentissage : {}".format(cl.statsOnDF(train)))
 print("test en validation: {}".format(cl.statsOnDF(test)))
-"""
