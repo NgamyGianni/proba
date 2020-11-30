@@ -3,6 +3,7 @@ import pandas as pd  # package for high-performance, easy-to-use data structures
 import numpy as np  # fundamental package for scientific computing with Python
 import math
 import scipy
+import matplotlib as plt
 
 train = pd.read_csv("train.csv")
 test = pd.read_csv("test.csv")
@@ -250,13 +251,14 @@ class MAPNaiveBayesClassifier(APrioriClassifier):
 					res[1] *= self.p[key][1][e[key]]
 					total *= (self.p[key][0][e[key]]*self.p0)+(self.p[key][1][e[key]]*self.p1)
 				else:
-					res[0] *= 0
-					res[1] *= 0
+					res[0] *= 0.
+					res[1] *= 0.
 		res[0] = (self.p0*res[0])/total
 		res[1] = (self.p1*res[1])/total
 		total2 = res[0]+res[1]
-		res[0] = res[0]/total2
-		res[1] = res[1]/total2
+		if total2 != 0:
+			res[0] /= total2
+			res[1] /= total2
 		return res
 
 	def estimClass(self, e):
@@ -289,7 +291,7 @@ def isIndepFromTarget(df, attr, x):
 	l = pd.crosstab(df.target, [df[attr]])
 	return scipy.stats.chi2_contingency(l)[1] >= x
 
-class ReducedMLNaiveBayesClassifier(APrioriClassifier):
+class ReducedMLNaiveBayesClassifier(MLNaiveBayesClassifier):
 	def __init__(self, df, x):
 		self.df = df
 		self.attrs = [attr for attr in df if not(isIndepFromTarget(df, attr, x)) and attr != "target"]
@@ -306,36 +308,10 @@ class ReducedMLNaiveBayesClassifier(APrioriClassifier):
 				res[1] *= 0
 		return res
 
-	def estimClass(self, e):
-		if self.estimProbas(e)[0] >= self.estimProbas(e)[1]:
-			return 0
-		return 1
-
 	def draw(self):
 		return drawNaiveBayes(self.attrs, "target")
 
-	def statsOnDF(self, data):
-		vp = 0
-		vn = 0
-		fp = 0
-		fn = 0
-
-		for i in range(len(data)):
-			e = data["target"][i]
-			if e == 0:
-				if self.estimClass(utils.getNthDict(data, i)) == 1:
-					fp += 1
-				else:
-					vn += 1
-			else:
-				if self.estimClass(utils.getNthDict(data, i)) == 1:
-					vp += 1
-				else:
-					fn += 1
-
-		return {"VP": vp, "VN": vn, "FP": fp, "FN": fn, "Précision": vp / (vp + fp), "Rappel": vp / (vp + fn)}
-
-class ReducedMAPNaiveBayesClassifier(APrioriClassifier):
+class ReducedMAPNaiveBayesClassifier(MAPNaiveBayesClassifier):
 
 	def __init__(self, df, x):
 		self.df = df
@@ -360,45 +336,29 @@ class ReducedMAPNaiveBayesClassifier(APrioriClassifier):
 		res[0] = (self.p0*res[0])/total
 		res[1] = (self.p1*res[1])/total
 		total2 = res[0]+res[1]
-		res[0] /= total2
-		res[1] /= total2
+		if total2 != 0:
+			res[0] /= total2
+			res[1] /= total2
 		return res
-
-	def estimClass(self, e):
-		if self.estimProbas(e)[0] >= self.estimProbas(e)[1]:
-			return 0
-		return 1
 
 	def draw(self):
 		return drawNaiveBayes(self.attrs, "target")
 
-	def statsOnDF(self, data):
-		vp = 0
-		vn = 0
-		fp = 0
-		fn = 0
+def mapClassifiers(dic, df):
+	x = []
+	y = []
 
-		for i in range(len(data)):
-			e = data["target"][i]
-			if e == 0:
-				if self.estimClass(utils.getNthDict(data, i)) == 1:
-					fp += 1
-				else:
-					vn += 1
-			else:
-				if self.estimClass(utils.getNthDict(data, i)) == 1:
-					vp += 1
-				else:
-					fn += 1
+	for cle in dic:
+		tmp = dic[cle].statsOnDF(df)
+		x.append(tmp["Précision"])
+		y.append(tmp["Rappel"])
 
-		return {"VP": vp, "VN": vn, "FP": fp, "FN": fn, "Précision": vp / (vp + fp), "Rappel": vp / (vp + fn)}
+	print(x)
+	print(y)
 
-cl=MAPNaiveBayesClassifier(train)
-for i in [0, 1, 2]:
-	print("Estimation de la proba de l'individu {} par MAPNaiveBayesClassifier : {}".format(i,cl.estimProbas(utils.getNthDict(train,i))))
-	print("Estimation de la classe de l'individu {} par MAPNaiveBayesClassifier : {}".format(i,cl.estimClass(utils.getNthDict(train,i)))) 
-print("test en apprentissage : {}".format(cl.statsOnDF(train)))
-print("test en validation: {}".format(cl.statsOnDF(test)))
+	plt.pyplot.scatter(x, y, c = "red", marker = "x")
 
+	for i in range(len(x)):
+		plt.pyplot.text(x[i], y[i], i+1)
 
-#print(scipy.stats.chi2_contingency(pd.crosstab(train.target, [train["fbs"]])))
+	plt.pyplot.show()
